@@ -1,0 +1,891 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ONESEC API",
+    "description": "**ONESEC API** — это сервис для пополнения аккаунтов в играх PUBG, MLBB и Genshin Impact через TRC20 USDT и ваучеры G-COIN.\n\n- **Базовый URL**: `https://api.onesec.su/api/v1`\n- **Метод запросов**: Все эндпоинты используют POST с JSON в теле.\n- **Аутентификация**: Через заголовки `merchantId` (ваш ID) и `sign` (MD5-подпись тела запроса: `md5(base64(payload) + API_SECRET)`).\n- **Формат ответа**: Всегда JSON с полями `status` (1 - успех, 0 - ошибка), `data` (данные) и `error` (описание ошибки).\n\nДокументация сгенерирована на основе спецификации OpenAPI 3.0 для удобной навигации и тестирования.\n",
+    "version": "1.0.0",
+    "contact": {"name": "Поддержка ONESEC", "url": "https://t.me/mazit0v"}
+  },
+  "servers": [
+    {
+      "url"        : "https://api.onesec.su/api/v1",
+      "description": "Основной сервер (Production)"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "integer", "example": 0                       },
+          "error" : {"type": "string",  "example": "Неправильная сигнатура"},
+          "code"  : {"type": "integer", "example": 1006                    }
+        },
+        "description": "Стандартный формат ошибки"
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "integer", "example": 1                  },
+          "data"  : {"type": "object"                                 },
+          "error" : {"type": "string",                "nullable": true}
+        },
+        "description": "Стандартный формат успешного ответа"
+      }
+    }
+  },
+  "tags": [
+    {"name": "Wallet", "description": "Операции с адресом кошелька"},
+    {"name": "Payment", "description": "Платежные ордера TRC20"},
+    {"name": "Status", "description": "Проверка статусов платежей"},
+    {"name": "Balance", "description": "Баланс мерчанта"},
+    {"name": "Price", "description": "Прайс-лист продуктов"},
+    {"name": "Player Order", "description": "Пополнение аккаунтов игроков"},
+    {"name": "Voucher", "description": "Ваучеры G-COIN для PUBG"},
+    {"name": "Order Status", "description": "Статус ордера пополнения"},
+    {"name": "Player Info", "description": "Информация об игроках"},
+    {
+      "name"       : "Package Availability",
+      "description": "Проверка доступности пакетов"
+    }
+  ],
+  "paths": {
+    "/wallet/address": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Запрос адреса кошелька",
+        "description": "Отправляется пустой POST-запрос для получения адреса кошелька TRC20 USDT.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true,
+            "description": "Ваш ID мерчанта"
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true,
+            "description": "MD5-подпись тела запроса (base64(payload) + API_SECRET)"
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true,
+            "description": "application/json"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": { "schema": {"type": "object"} }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Адрес получен",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {
+                  "data": [
+                    {
+                      "address": "TDw9NEaGxYHjNWn5MwkrFrxrb3VRwAvf7E",
+                      "idPayment": 1,
+                      "network": "TRC20"
+                    }
+                  ],
+                  "error": null,
+                  "status": 1
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Ошибка",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {
+                  "status": 0,
+                  "error": "Неправильная сигнатура",
+                  "code": 1006
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payment/create": {
+      "post": {
+        "tags": ["Payment"],
+        "summary": "Создание платежного ордера",
+        "description": "Создаёт ордер для пополнения баланса через TRC20 USDT.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true,
+            "description": "Ваш ID мерчанта"
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true,
+            "description": "MD5-подпись тела запроса"
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true,
+            "description": "application/json"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type"       : "number",
+                    "description": "Сумма пополнения (USDT)"
+                  },
+                  "txId": {
+                    "type"       : "string",
+                    "description": "ID транзакции в сети"
+                  },
+                  "urlCallback": {
+                    "type": "string",
+                    "description": "URL для webhook-уведомлений",
+                    "nullable": true
+                  }
+                },
+                "required": ["amount", "txId"]
+              },
+              "example": {
+                "amount": 10.5,
+                "txId": "transaction_hash_example",
+                "urlCallback": "https://your.site/callback"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ордер создан",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {
+                  "data": {
+                    "dateCreate": "2024-06-10T08:10:56.039113",
+                    "status"    : "processing",
+                    "uuid"      : "606c29ab-f647-4833-bd74-4650092803f9"
+                  },
+                  "error": null,
+                  "status": 1
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Ошибка",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {
+                  "status": 0,
+                  "error": "Неверно указана сумма пополнения",
+                  "code": 1010
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payment/status": {
+      "post": {
+        "tags": ["Status"],
+        "summary": "Получение статуса платежа",
+        "description": "Получает статус платежного ордера по uuid или orderId (один обязателен).",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "uuid"   : {"type": "string", "nullable": true},
+                  "orderId": {"type": "string", "nullable": true}
+                },
+                "example": {"uuid": "606c29ab-f647-4833-bd74-4650092803f9"}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Статус получен",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {
+                  "data": {
+                    "statusOrder": "completed",
+                    "uuid"       : "606c29ab-f647-4833-bd74-4650092803f9",
+                    "dateCreate" : "2024-06-10T08:10:56.034125",
+                    "dateEnd"    : "2024-06-10T08:19:39.080899"
+                  },
+                  "error": null,
+                  "status": 1
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Ошибка",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {"status": 0, "error": "Неверный uuid", "code": 1016}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/balance": {
+      "post": {
+        "tags": ["Balance"],
+        "summary": "Баланс мерчанта",
+        "description": "Возвращает текущий баланс в USDT. Тело запроса пустое.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": { "schema": {"type": "object"} }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Баланс получен",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {
+                  "data": {"balance": 550.362},
+                  "error": null,
+                  "status": 1
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Ошибка",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {
+                  "status": 0,
+                  "error": "Вы заблокированы, обратитесь в поддержку",
+                  "code": 1005
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/price/list": {
+      "post": {
+        "tags": ["Price"],
+        "summary": "Прайс-лист",
+        "description": "Возвращает список доступных пакетов и цен. Тело запроса пустое.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": { "schema": {"type": "object"} }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Прайс-лист получен",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {
+                  "data": [
+                    {"goodsName": "PUBG 60 UC", "id": 4473, "payPrice": 0.849},
+                    {
+                      "goodsName": "PUBG Mobile 300 + 25 UC ",
+                      "id": 4472,
+                      "payPrice": 3.591
+                    },
+                    {
+                      "goodsName": "Genshin: 60 Genesis Crystals",
+                      "id": 9227,
+                      "payPrice": 2.01,
+                      "serverInfo": {
+                        "3001": "Asia",
+                        "3002": "TW, HK, ",
+                        "3003": "Europe",
+                        "3004": "America"
+                      }
+                    }
+                  ],
+                  "error": null,
+                  "status": 1
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Ошибка",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {
+                  "status": 0,
+                  "error": "Системная ошибка",
+                  "code": 2002
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/order/submit/player": {
+      "post": {
+        "tags": ["Player Order"],
+        "summary": "Создание ордера на пополнение игрока",
+        "description": "Пополнение аккаунта игрока в PUBG/MLBB/Genshin.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "playerId"   : {"type": "string"                   },
+                  "pubgId"     : {"type": "string"                   },
+                  "server"     : {"type": "string"                   },
+                  "packageId"  : {"type": "integer"                  },
+                  "orderId"    : {"type": "string"                   },
+                  "urlCallback": {"type": "string",  "nullable": true}
+                },
+                "required": ["playerId", "packageId", "orderId"]
+              },
+              "example": {
+                "playerId": "5146654910",
+                "pubgId": "4473",
+                "packageId": 4473,
+                "orderId": "667666804",
+                "urlCallback": "https://your.site/callback"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ордер создан",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {
+                  "data": {
+                    "orderId": "667666804",
+                    "payPrice": 0.829,
+                    "playerId": 5146654910,
+                    "pubgId": 4473,
+                    "statusOrder": "new",
+                    "uuid": "34ce7977-7479-4c6c-a34d-0c97a3120650",
+                    "serverInfo": {"serverId": 18003},
+                    "date": "2024-06-10T10:18:29.234865"
+                  },
+                  "error": null,
+                  "status": 1
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Ошибка",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {
+                  "status": 0,
+                  "error": "Недостаточно баланса",
+                  "code": 1019
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/order/submit/voucher": {
+      "post": {
+        "tags": ["Voucher"],
+        "summary": "Создание ордера на ваучер G-COIN PUBG",
+        "description": "Генерация ваучера G-COIN (результат в webhook).",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "quantity"   : {"type": "integer"                  },
+                  "orderId"    : {"type": "string"                   },
+                  "urlCallback": {"type": "string",  "nullable": true}
+                },
+                "required": ["quantity", "orderId"]
+              },
+              "example": {
+                "quantity": 100,
+                "orderId": "667666804",
+                "urlCallback": "https://your.site/callback"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ордер создан",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {
+                  "data": {
+                    "orderId": "667666804",
+                    "payPrice": 1.09,
+                    "pubgId": 10450,
+                    "statusOrder": "new",
+                    "uuid": "34ce7977-7479-4c6c-a34d-0c97a3120650",
+                    "date": "2024-06-10T10:18:29.234865"
+                  },
+                  "error": null,
+                  "status": 1
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Ошибка",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {
+                  "status": 0,
+                  "error": "Ошибка при формировании ордера",
+                  "code": 3001
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/order/getStatusOrder": {
+      "post": {
+        "tags": ["Order Status"],
+        "summary": "Статус ордера пополнения",
+        "description": "Получает статус ордера по uuid или orderId.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "uuid"   : {"type": "string"},
+                  "orderId": {"type": "string"}
+                },
+                "example": {"uuid": "34ce7977-7479-4c6c-a34d-0c97a3120650"}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Статус получен",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {
+                  "data": {
+                    "orderId": "667666804",
+                    "payPrice": 0.84,
+                    "playerId": 5146654910,
+                    "pubgId": 4473,
+                    "statusOrder": "completed",
+                    "uuid": "34ce7977-7479-4c6c-a34d-0c97a3120650",
+                    "serverInfo": {"serverId": 3001, "serverName": "America"},
+                    "date": "2024-06-10T10:18:29.234865"
+                  },
+                  "error": null,
+                  "message": null,
+                  "status": 1
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Ошибка",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {"status": 0, "error": "Неверный uuid", "code": 1016}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/player/info": {
+      "post": {
+        "tags": ["Player Info"],
+        "summary": "Информация по игроку",
+        "description": "Получает данные об аккаунте игрока (nickname, level и т.д.).",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "playerId": {"type": "string"},
+                  "pubgId"  : {"type": "string"},
+                  "server"  : {"type": "string"}
+                },
+                "required": ["playerId"],
+                "example": {"playerId": "5777654910"}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Информация получена",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {
+                  "data": {
+                    "accountName": "god of War",
+                    "playerId": 5777654910
+                  },
+                  "error": null,
+                  "status": 1
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Ошибка",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {
+                  "status": 0,
+                  "error": "Невалидный ID игрока",
+                  "code": 2003
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/player/package-available": {
+      "post": {
+        "tags": ["Package Availability"],
+        "summary": "Доступность пакета для игрока",
+        "description": "Проверяет, можно ли пополнить пакет для конкретного игрока.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "playerId" : {"type": "string" },
+                  "packageId": {"type": "integer"},
+                  "server"   : {"type": "string" }
+                },
+                "required": ["playerId", "packageId"],
+                "example": {"playerId": "54333345", "packageId": 4473}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Проверка завершена",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {
+                  "data": {
+                    "playerId" : 54333345,
+                    "pubgId"   :     4473,
+                    "available":        0
+                  },
+                  "error": null,
+                  "status": 1
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Ошибка",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {
+                  "status": 0,
+                  "error": "Пакет уже есть у игрока",
+                  "code": 2005
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {
+    "notification": {
+      "post": {
+        "summary": "Webhook-уведомление об изменении статуса",
+        "description": "Отправляется на urlCallback при изменении статуса ордера/платежа.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "merchantId",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "sign",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "schema": {"type": "string"},
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "uuid": {"type": "string"},
+                  "statusOrder": {
+                    "type": "string",
+                    "enum": ["processing", "completed", "canceled", "failed"]
+                  },
+                  "message": {"type": "string", "nullable": true},
+                  "cardPass": {"type": "string", "nullable": true},
+                  "amount": {"type": "number", "nullable": true}
+                }
+              },
+              "example": {
+                "uuid": "34ce7977-7479-4c6c-a34d-0c97a3120650",
+                "statusOrder": "completed",
+                "amount": 10.5,
+                "cardPass": "GC1234567890ABCDEFG",
+                "message": null
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешный приём (игнорируется тело)",
+            "content": {
+              "application/json": { "schema": {"type": "object"} }
+            }
+          }
+        }
+      }
+    }
+  }
+}
